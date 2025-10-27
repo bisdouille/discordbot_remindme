@@ -1087,7 +1087,7 @@ client.on('interactionCreate', async interaction => {
     if (reminderIndex === -1) {
       await interaction.reply({
         content: '❌ Rappel introuvable.',
-        ephemeral: true
+        flags: 64 // ephemeral
       });
       return;
     }
@@ -1123,6 +1123,8 @@ client.on('interactionCreate', async interaction => {
     // Bouton "Snooze 1h"
     if (action === 'snooze1h') {
       reminder.timestamp = Date.now() + (60 * 60 * 1000);
+      reminder.sent = false; // Réinitialiser pour qu'il soit renvoyé
+      delete reminder.sentAt;
       reminders[reminderIndex] = reminder;
       await saveReminders(reminders);
 
@@ -1138,6 +1140,8 @@ client.on('interactionCreate', async interaction => {
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(9, 0, 0, 0);
       reminder.timestamp = tomorrow.getTime();
+      reminder.sent = false; // Réinitialiser pour qu'il soit renvoyé
+      delete reminder.sentAt;
       reminders[reminderIndex] = reminder;
       await saveReminders(reminders);
 
@@ -1195,17 +1199,21 @@ client.on('interactionCreate', async interaction => {
         console.error('Erreur récupération message:', error);
       }
 
-      // Créer le rappel
+      // Créer le rappel avec un meilleur message
       const reminders = await loadReminders();
+
+      // Construire le message du rappel
+      let rappelMessage = note || 'Voir le message enregistré';
+
       const newReminder = {
         id: Date.now(),
         userId: interaction.user.id,
-        message: `Rappel: voir le message`,
+        message: rappelMessage,
         timestamp: parsedDate.getTime(),
         createdAt: Date.now(),
-        contexte: note,
+        contexte: null,
         lien: messageLink,
-        tag: 'Message',
+        tag: null,
         priorite: 'moyenne',
         trelloCardId: null
       };
@@ -1221,11 +1229,8 @@ client.on('interactionCreate', async interaction => {
         minute: '2-digit'
       });
 
-      let confirmMsg = `✅ **Rappel créé pour ${dateStr}**\n\n📋 Lien vers le message enregistré`;
-      if (note) confirmMsg += `\n📝 Note: ${note}`;
-
       await interaction.editReply({
-        content: confirmMsg
+        content: `✅ **Rappel créé pour ${dateStr}**\n\n📋 ${rappelMessage}\n🔗 Lien enregistré vers le message`
       });
     }
   }
@@ -1236,10 +1241,11 @@ client.on('interactionCreate', async interaction => {
 async function checkReminders() {
   const now = Date.now();
   const reminders = await loadReminders();
-  const remainingReminders = [];
+  let modified = false;
 
   for (const reminder of reminders) {
-    if (reminder.timestamp <= now) {
+    // Ne traiter que les rappels dont l'heure est dépassée et qui n'ont pas encore été envoyés
+    if (reminder.timestamp <= now && !reminder.sent) {
       try {
         const user = await client.users.fetch(reminder.userId);
 
@@ -1272,17 +1278,31 @@ async function checkReminders() {
           components: [row]
         });
 
+        // Marquer comme envoyé mais le garder dans la liste pour les boutons
+        reminder.sent = true;
+        reminder.sentAt = Date.now();
+        modified = true;
+
         console.log(`Rappel envoyé à ${user.tag}: ${reminder.message}`);
       } catch (error) {
         console.error(`Erreur lors de l'envoi du rappel ${reminder.id}:`, error);
-        remainingReminders.push(reminder);
       }
-    } else {
-      remainingReminders.push(reminder);
     }
   }
 
-  await saveReminders(remainingReminders);
+  // Nettoyer les rappels envoyés depuis plus de 1 heure (boutons expirés)
+  const oneHourAgo = Date.now() - (60 * 60 * 1000);
+  const cleanedReminders = reminders.filter(r => {
+    if (r.sent && r.sentAt && r.sentAt < oneHourAgo) {
+      console.log(`🗑️ Nettoyage du rappel expiré: ${r.id}`);
+      return false;
+    }
+    return true;
+  });
+
+  if (modified || cleanedReminders.length !== reminders.length) {
+    await saveReminders(cleanedReminders);
+  }
 }
 
 // ==================== DÉMARRAGE DU BOT ====================
