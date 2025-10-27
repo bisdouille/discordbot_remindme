@@ -230,6 +230,19 @@ async function deleteRemindersForTrelloCard(cardId) {
 const app = express();
 app.use(express.json());
 
+// Route de santé pour garder Render éveillé
+app.get('/', (req, res) => {
+  res.status(200).send('Bot Discord actif ✅');
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    bot: client.user ? client.user.tag : 'non connecté',
+    uptime: process.uptime()
+  });
+});
+
 // Route HEAD pour la validation du webhook Trello
 app.head('/webhook/trello', (req, res) => {
   res.status(200).send();
