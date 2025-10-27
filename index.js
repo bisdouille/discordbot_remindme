@@ -532,7 +532,7 @@ client.on('interactionCreate', async interaction => {
 
     // COMMANDE: /rappel
     if (commandName === 'rappel') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
 
       const message = interaction.options.getString('message');
       const jours = interaction.options.getInteger('jours') || 0;
@@ -588,7 +588,7 @@ client.on('interactionCreate', async interaction => {
 
     // COMMANDE: /rappel-rapide
     if (commandName === 'rappel-rapide') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
 
       const quand = interaction.options.getString('quand');
       const message = interaction.options.getString('message');
@@ -641,7 +641,7 @@ client.on('interactionCreate', async interaction => {
 
     // COMMANDE: /mes-rappels
     if (commandName === 'mes-rappels') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
 
       const reminders = await loadReminders();
       const userReminders = reminders.filter(r => r.userId === interaction.user.id);
@@ -685,7 +685,7 @@ client.on('interactionCreate', async interaction => {
 
     // COMMANDE: /rappels-par-tag
     if (commandName === 'rappels-par-tag') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
 
       const tag = interaction.options.getString('tag');
       const reminders = await loadReminders();
@@ -717,7 +717,7 @@ client.on('interactionCreate', async interaction => {
 
     // COMMANDE: /supprimer-rappel
     if (commandName === 'supprimer-rappel') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
 
       const id = interaction.options.getInteger('id');
       const reminders = await loadReminders();
@@ -744,16 +744,15 @@ client.on('interactionCreate', async interaction => {
       const quand = interaction.options.getString('quand');
 
       try {
+        await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
+
         const boardId = process.env.TRELLO_BOARD_ID;
         if (!boardId) {
-          await interaction.reply({
-            content: '❌ TRELLO_BOARD_ID manquant dans .env',
-            ephemeral: true
+          await interaction.editReply({
+            content: '❌ TRELLO_BOARD_ID manquant dans .env'
           });
           return;
         }
-
-        await interaction.deferReply({ ephemeral: true });
 
         const lists = await getTrelloLists(boardId);
         const targetList = lists.find(l => l.name.toLowerCase() === listeName.toLowerCase());
@@ -826,7 +825,7 @@ client.on('interactionCreate', async interaction => {
     // COMMANDE: /trello-config
     if (commandName === 'trello-config') {
       try {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
 
         const boardId = process.env.TRELLO_BOARD_ID;
         if (!boardId) {
@@ -856,7 +855,7 @@ client.on('interactionCreate', async interaction => {
     // COMMANDE: /trello-webhook-setup
     if (commandName === 'trello-webhook-setup') {
       try {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
 
         const boardId = process.env.TRELLO_BOARD_ID;
         const webhookUrl = process.env.WEBHOOK_URL;
@@ -900,7 +899,7 @@ client.on('interactionCreate', async interaction => {
     // COMMANDE: /trello-webhook-delete
     if (commandName === 'trello-webhook-delete') {
       try {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
 
         const webhooks = await listTrelloWebhooks();
 
