@@ -515,7 +515,13 @@ const commands = [
   new SlashCommandBuilder()
     .setName('clear-tout')
     .setDescription('⚠️ Supprimer TOUS vos rappels (action irréversible)'),
-].map(command => command.toJSON());
+].map(command => {
+  const json = command.toJSON();
+  // Permettre les commandes dans les DMs et serveurs
+  json.integration_types = [0, 1]; // 0 = GUILD_INSTALL, 1 = USER_INSTALL
+  json.contexts = [0, 1, 2]; // 0 = GUILD, 1 = BOT_DM, 2 = PRIVATE_CHANNEL
+  return json;
+});
 
 // Enregistrer les commandes slash
 async function registerCommands() {
