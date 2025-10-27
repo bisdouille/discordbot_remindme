@@ -128,6 +128,9 @@ async function createOrUpdateRemindersForTrelloCard(card, userId) {
   const reminders = await loadReminders();
   const now = new Date();
 
+  // Construire l'URL de la carte manuellement
+  const cardUrl = card.url || (card.shortLink ? `https://trello.com/c/${card.shortLink}` : `https://trello.com/c/${card.id}`);
+
   // Vérifier si des rappels existent déjà pour cette carte
   const existingReminders = reminders.filter(r => r.trelloCardId === card.id);
 
@@ -149,7 +152,7 @@ async function createOrUpdateRemindersForTrelloCard(card, userId) {
     // Mettre à jour les rappels existants
     existingReminders.forEach(reminder => {
       reminder.message = card.name;
-      reminder.lien = card.url;
+      reminder.lien = cardUrl;
     });
     await saveReminders(reminders);
     console.log(`🔄 Rappels mis à jour pour carte Trello: ${card.name}`);
@@ -163,7 +166,7 @@ async function createOrUpdateRemindersForTrelloCard(card, userId) {
       timestamp: reminder10h.getTime(),
       createdAt: Date.now(),
       contexte: 'Tâche Trello - Rappel du matin',
-      lien: card.url,
+      lien: cardUrl,
       tag: 'Trello',
       priorite: 'moyenne',
       trelloCardId: card.id
@@ -176,7 +179,7 @@ async function createOrUpdateRemindersForTrelloCard(card, userId) {
       timestamp: reminder15h.getTime(),
       createdAt: Date.now(),
       contexte: 'Tâche Trello - Rappel de l\'après-midi',
-      lien: card.url,
+      lien: cardUrl,
       tag: 'Trello',
       priorite: 'moyenne',
       trelloCardId: card.id
@@ -279,7 +282,9 @@ app.post('/webhook/trello', async (req, res) => {
         if (shouldNotify(card.id)) {
           try {
             const user = await client.users.fetch(userId);
-            await user.send(`🆕 **Nouvelle tâche Trello ajoutée**\n\n📋 ${card.name}\n\n⏰ Vous recevrez 2 rappels : à 10h et 15h\n🔗 ${card.url}`);
+            // Construire l'URL de la carte manuellement
+            const cardUrl = card.url || (card.shortLink ? `https://trello.com/c/${card.shortLink}` : `https://trello.com/c/${card.id}`);
+            await user.send(`🆕 **Nouvelle tâche Trello ajoutée**\n\n📋 ${card.name}\n\n⏰ Vous recevrez 2 rappels : à 10h et 15h\n🔗 ${cardUrl}`);
           } catch (error) {
             console.error('Erreur envoi notification:', error);
           }
@@ -309,7 +314,9 @@ app.post('/webhook/trello', async (req, res) => {
         if (shouldNotify(card.id)) {
           try {
             const user = await client.users.fetch(userId);
-            await user.send(`🆕 **Nouvelle tâche Trello ajoutée**\n\n📋 ${card.name}\n\n⏰ Vous recevrez 2 rappels : à 10h et 15h\n🔗 ${card.url}`);
+            // Construire l'URL de la carte manuellement
+            const cardUrl = card.url || (card.shortLink ? `https://trello.com/c/${card.shortLink}` : `https://trello.com/c/${card.id}`);
+            await user.send(`🆕 **Nouvelle tâche Trello ajoutée**\n\n📋 ${card.name}\n\n⏰ Vous recevrez 2 rappels : à 10h et 15h\n🔗 ${cardUrl}`);
           } catch (error) {
             console.error('Erreur envoi notification:', error);
           }
