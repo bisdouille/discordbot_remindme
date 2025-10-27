@@ -504,6 +504,10 @@ const commands = [
   new SlashCommandBuilder()
     .setName('trello-webhook-delete')
     .setDescription('Supprimer tous les webhooks Trello'),
+
+  new SlashCommandBuilder()
+    .setName('clear-tout')
+    .setDescription('⚠️ Supprimer TOUS vos rappels (action irréversible)'),
 ].map(command => command.toJSON());
 
 // Enregistrer les commandes slash
@@ -962,10 +966,67 @@ client.on('interactionCreate', async interaction => {
         });
       }
     }
+
+    // COMMANDE: /clear-tout
+    if (commandName === 'clear-tout') {
+      await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
+
+      const reminders = await loadReminders();
+      const userReminders = reminders.filter(r => r.userId === interaction.user.id);
+
+      if (userReminders.length === 0) {
+        await interaction.editReply({
+          content: '📭 Vous n\'avez aucun rappel à supprimer.'
+        });
+        return;
+      }
+
+      // Créer un bouton de confirmation
+      const confirmButton = new ButtonBuilder()
+        .setCustomId('confirm_clear_all')
+        .setLabel(`⚠️ OUI, supprimer mes ${userReminders.length} rappels`)
+        .setStyle(ButtonStyle.Danger);
+
+      const cancelButton = new ButtonBuilder()
+        .setCustomId('cancel_clear_all')
+        .setLabel('❌ Annuler')
+        .setStyle(ButtonStyle.Secondary);
+
+      const row = new ActionRowBuilder().addComponents(confirmButton, cancelButton);
+
+      await interaction.editReply({
+        content: `⚠️ **ATTENTION**\n\nVous êtes sur le point de supprimer **${userReminders.length} rappel(s)**.\n\n**Cette action est irréversible !**\n\nÊtes-vous sûr ?`,
+        components: [row]
+      });
+    }
   }
 
   // Gérer les boutons
   if (interaction.isButton()) {
+    // Bouton de confirmation clear-tout
+    if (interaction.customId === 'confirm_clear_all') {
+      const reminders = await loadReminders();
+      const userReminders = reminders.filter(r => r.userId === interaction.user.id);
+      const remainingReminders = reminders.filter(r => r.userId !== interaction.user.id);
+
+      await saveReminders(remainingReminders);
+
+      await interaction.update({
+        content: `✅ **${userReminders.length} rappel(s) supprimé(s)**\n\nToutes vos données ont été effacées.`,
+        components: []
+      });
+      return;
+    }
+
+    // Bouton d'annulation clear-tout
+    if (interaction.customId === 'cancel_clear_all') {
+      await interaction.update({
+        content: '❌ **Suppression annulée**\n\nVos rappels sont conservés.',
+        components: []
+      });
+      return;
+    }
+
     const [action, reminderId] = interaction.customId.split('_');
 
     const reminders = await loadReminders();
