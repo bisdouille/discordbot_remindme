@@ -29,6 +29,10 @@ const WEBHOOK_IDS_FILE = join(__dirname, 'trello-webhooks.json');
 // Cache pour éviter les notifications en double (cardId -> timestamp)
 const notificationCache = new Map();
 
+// Cache temporaire pour stocker les URLs des messages (messageId -> url)
+// Expire après 10 minutes
+const messageUrlCache = new Map();
+
 // Charger les rappels depuis le fichier
 async function loadReminders() {
   try {
@@ -552,6 +556,11 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isMessageContextMenuCommand()) {
     if (interaction.commandName === 'Créer un rappel') {
       const message = interaction.targetMessage;
+
+      // Stocker l'URL du message dans le cache temporaire
+      messageUrlCache.set(message.id, message.url);
+      // Auto-nettoyer après 10 minutes
+      setTimeout(() => messageUrlCache.delete(message.id), 10 * 60 * 1000);
 
       // Créer un modal pour demander les détails du rappel
       const modal = new ModalBuilder()
@@ -1190,14 +1199,8 @@ client.on('interactionCreate', async interaction => {
         return;
       }
 
-      // Récupérer le message original
-      let messageLink = null;
-      try {
-        const targetMessage = await interaction.channel.messages.fetch(messageId);
-        messageLink = targetMessage.url;
-      } catch (error) {
-        console.error('Erreur récupération message:', error);
-      }
+      // Récupérer l'URL du message depuis le cache
+      const messageLink = messageUrlCache.get(messageId) || null;
 
       // Créer le rappel avec un meilleur message
       const reminders = await loadReminders();
