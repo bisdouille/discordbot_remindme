@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -678,8 +678,37 @@ client.on('interactionCreate', async interaction => {
         return rappelText;
       }).join('\n\n');
 
+      // Créer un menu déroulant pour supprimer des rappels (max 25 options)
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('delete_reminders')
+        .setPlaceholder('Sélectionnez des rappels à supprimer')
+        .setMinValues(1)
+        .setMaxValues(Math.min(userReminders.length, 25));
+
+      // Ajouter les options (limité à 25 premiers rappels)
+      userReminders.slice(0, 25).forEach(r => {
+        const date = new Date(r.timestamp);
+        const dateStr = date.toLocaleString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        const prioriteEmoji = { haute: '🔴', moyenne: '🟡', basse: '🟢' }[r.priorite];
+
+        selectMenu.addOptions(
+          new StringSelectMenuOptionBuilder()
+            .setLabel(`${r.message.substring(0, 80)}`)
+            .setDescription(`${prioriteEmoji} ${dateStr}${r.tag ? ` • ${r.tag}` : ''}`)
+            .setValue(r.id.toString())
+        );
+      });
+
+      const row = new ActionRowBuilder().addComponents(selectMenu);
+
       await interaction.editReply({
-        content: `📋 **Vos rappels actifs (${userReminders.length}):**\n\n${rappelsList}`
+        content: `📋 **Vos rappels actifs (${userReminders.length}):**\n\n${rappelsList}`,
+        components: [row]
       });
     }
 
@@ -1001,6 +1030,25 @@ client.on('interactionCreate', async interaction => {
 
       await interaction.update({
         content: interaction.message.content + '\n\n📅 **Reporté à demain 9h**',
+        components: []
+      });
+    }
+  }
+
+  // Gérer les menus déroulants (Select Menus)
+  if (interaction.isStringSelectMenu()) {
+    if (interaction.customId === 'delete_reminders') {
+      const selectedIds = interaction.values.map(id => parseInt(id));
+      const reminders = await loadReminders();
+
+      // Filtrer les rappels à garder
+      const remainingReminders = reminders.filter(r => !selectedIds.includes(r.id) || r.userId !== interaction.user.id);
+      const deletedCount = reminders.length - remainingReminders.length;
+
+      await saveReminders(remainingReminders);
+
+      await interaction.update({
+        content: `✅ **${deletedCount} rappel(s) supprimé(s)**\n\n${interaction.message.content}`,
         components: []
       });
     }
