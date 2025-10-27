@@ -518,6 +518,8 @@ client.on('interactionCreate', async interaction => {
 
     // COMMANDE: /rappel
     if (commandName === 'rappel') {
+      await interaction.deferReply({ ephemeral: true });
+
       const message = interaction.options.getString('message');
       const jours = interaction.options.getInteger('jours') || 0;
       const heures = interaction.options.getInteger('heures') || 0;
@@ -528,9 +530,8 @@ client.on('interactionCreate', async interaction => {
       const priorite = interaction.options.getString('priorite') || 'moyenne';
 
       if (jours === 0 && heures === 0 && minutes === 0) {
-        await interaction.reply({
-          content: '❌ Veuillez spécifier au moins une durée (jours, heures ou minutes).',
-          ephemeral: true
+        await interaction.editReply({
+          content: '❌ Veuillez spécifier au moins une durée (jours, heures ou minutes).'
         });
         return;
       }
@@ -568,11 +569,13 @@ client.on('interactionCreate', async interaction => {
       if (lien) confirmationMsg += `\n🔗 **Lien :** ${lien}`;
       confirmationMsg += `\n\n📝 ID du rappel: ${newReminder.id}`;
 
-      await interaction.reply({ content: confirmationMsg, ephemeral: true });
+      await interaction.editReply({ content: confirmationMsg });
     }
 
     // COMMANDE: /rappel-rapide
     if (commandName === 'rappel-rapide') {
+      await interaction.deferReply({ ephemeral: true });
+
       const quand = interaction.options.getString('quand');
       const message = interaction.options.getString('message');
       const tag = interaction.options.getString('tag');
@@ -582,9 +585,8 @@ client.on('interactionCreate', async interaction => {
       const parsedDate = chrono.fr.parseDate(quand, new Date());
 
       if (!parsedDate || parsedDate <= new Date()) {
-        await interaction.reply({
-          content: `❌ Je n'ai pas pu comprendre "${quand}". Essayez: "demain 14h", "dans 2 heures", "lundi", "vendredi 9h"`,
-          ephemeral: true
+        await interaction.editReply({
+          content: `❌ Je n'ai pas pu comprendre "${quand}". Essayez: "demain 14h", "dans 2 heures", "lundi", "vendredi 9h"`
         });
         return;
       }
@@ -620,18 +622,19 @@ client.on('interactionCreate', async interaction => {
       confirmationMsg += `\n${prioriteEmoji} **Priorité :** ${priorite}`;
       confirmationMsg += `\n\n📝 ID du rappel: ${newReminder.id}`;
 
-      await interaction.reply({ content: confirmationMsg, ephemeral: true });
+      await interaction.editReply({ content: confirmationMsg });
     }
 
     // COMMANDE: /mes-rappels
     if (commandName === 'mes-rappels') {
+      await interaction.deferReply({ ephemeral: true });
+
       const reminders = await loadReminders();
       const userReminders = reminders.filter(r => r.userId === interaction.user.id);
 
       if (userReminders.length === 0) {
-        await interaction.reply({
-          content: '📭 Vous n\'avez aucun rappel actif.',
-          ephemeral: true
+        await interaction.editReply({
+          content: '📭 Vous n\'avez aucun rappel actif.'
         });
         return;
       }
@@ -661,22 +664,22 @@ client.on('interactionCreate', async interaction => {
         return rappelText;
       }).join('\n\n');
 
-      await interaction.reply({
-        content: `📋 **Vos rappels actifs (${userReminders.length}):**\n\n${rappelsList}`,
-        ephemeral: true
+      await interaction.editReply({
+        content: `📋 **Vos rappels actifs (${userReminders.length}):**\n\n${rappelsList}`
       });
     }
 
     // COMMANDE: /rappels-par-tag
     if (commandName === 'rappels-par-tag') {
+      await interaction.deferReply({ ephemeral: true });
+
       const tag = interaction.options.getString('tag');
       const reminders = await loadReminders();
       const taggedReminders = reminders.filter(r => r.userId === interaction.user.id && r.tag === tag);
 
       if (taggedReminders.length === 0) {
-        await interaction.reply({
-          content: `📭 Vous n'avez aucun rappel avec le tag "${tag}".`,
-          ephemeral: true
+        await interaction.editReply({
+          content: `📭 Vous n'avez aucun rappel avec le tag "${tag}".`
         });
         return;
       }
@@ -693,22 +696,22 @@ client.on('interactionCreate', async interaction => {
         return `${prioriteEmoji} **ID ${r.id}**: ${r.message}\n   ⏰ ${dateStr}`;
       }).join('\n\n');
 
-      await interaction.reply({
-        content: `🏷️ **Rappels avec le tag "${tag}" (${taggedReminders.length}):**\n\n${rappelsList}`,
-        ephemeral: true
+      await interaction.editReply({
+        content: `🏷️ **Rappels avec le tag "${tag}" (${taggedReminders.length}):**\n\n${rappelsList}`
       });
     }
 
     // COMMANDE: /supprimer-rappel
     if (commandName === 'supprimer-rappel') {
+      await interaction.deferReply({ ephemeral: true });
+
       const id = interaction.options.getInteger('id');
       const reminders = await loadReminders();
       const index = reminders.findIndex(r => r.id === id && r.userId === interaction.user.id);
 
       if (index === -1) {
-        await interaction.reply({
-          content: '❌ Rappel introuvable ou vous n\'avez pas la permission de le supprimer.',
-          ephemeral: true
+        await interaction.editReply({
+          content: '❌ Rappel introuvable ou vous n\'avez pas la permission de le supprimer.'
         });
         return;
       }
@@ -716,9 +719,8 @@ client.on('interactionCreate', async interaction => {
       reminders.splice(index, 1);
       await saveReminders(reminders);
 
-      await interaction.reply({
-        content: `🗑️ Rappel ${id} supprimé avec succès.`,
-        ephemeral: true
+      await interaction.editReply({
+        content: `🗑️ Rappel ${id} supprimé avec succès.`
       });
     }
 
