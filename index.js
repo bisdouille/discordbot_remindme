@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ContextMenuCommandBuilder, ApplicationCommandType, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -515,6 +515,11 @@ const commands = [
   new SlashCommandBuilder()
     .setName('clear-tout')
     .setDescription('⚠️ Supprimer TOUS vos rappels (action irréversible)'),
+
+  // Commande de menu contextuel (clic droit sur message)
+  new ContextMenuCommandBuilder()
+    .setName('Créer un rappel')
+    .setType(ApplicationCommandType.Message),
 ].map(command => {
   const json = command.toJSON();
   // Permettre les commandes dans les DMs et serveurs
@@ -543,6 +548,40 @@ async function registerCommands() {
 // ==================== GESTIONNAIRE D'INTERACTIONS ====================
 
 client.on('interactionCreate', async interaction => {
+  // Gérer les commandes de menu contextuel (clic droit)
+  if (interaction.isMessageContextMenuCommand()) {
+    if (interaction.commandName === 'Créer un rappel') {
+      const message = interaction.targetMessage;
+
+      // Créer un modal pour demander les détails du rappel
+      const modal = new ModalBuilder()
+        .setCustomId(`reminder_modal_${message.id}`)
+        .setTitle('Créer un rappel depuis ce message');
+
+      const quandInput = new TextInputBuilder()
+        .setCustomId('quand')
+        .setLabel('Quand ?')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Ex: demain 14h, dans 2h, lundi 9h')
+        .setRequired(true);
+
+      const noteInput = new TextInputBuilder()
+        .setCustomId('note')
+        .setLabel('Note personnelle (optionnel)')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Contexte ou note pour ce rappel...')
+        .setRequired(false);
+
+      const row1 = new ActionRowBuilder().addComponents(quandInput);
+      const row2 = new ActionRowBuilder().addComponents(noteInput);
+
+      modal.addComponents(row1, row2);
+
+      await interaction.showModal(modal);
+      return;
+    }
+  }
+
   // Gérer les commandes slash
   if (interaction.isChatInputCommand()) {
     const { commandName } = interaction;
@@ -1124,6 +1163,69 @@ client.on('interactionCreate', async interaction => {
       await interaction.update({
         content: `✅ **${deletedCount} rappel(s) supprimé(s)**\n\n${interaction.message.content}`,
         components: []
+      });
+    }
+  }
+
+  // Gérer les soumissions de modals
+  if (interaction.isModalSubmit()) {
+    if (interaction.customId.startsWith('reminder_modal_')) {
+      await interaction.deferReply({ flags: 64 }); // ephemeral
+
+      const messageId = interaction.customId.replace('reminder_modal_', '');
+      const quand = interaction.fields.getTextInputValue('quand');
+      const note = interaction.fields.getTextInputValue('note') || null;
+
+      // Parser la date avec chrono
+      const parsedDate = chrono.fr.parseDate(quand, new Date());
+
+      if (!parsedDate || parsedDate <= new Date()) {
+        await interaction.editReply({
+          content: `❌ Je n'ai pas pu comprendre "${quand}". Essayez: "demain 14h", "dans 2 heures", "lundi 9h"`
+        });
+        return;
+      }
+
+      // Récupérer le message original
+      let messageLink = null;
+      try {
+        const targetMessage = await interaction.channel.messages.fetch(messageId);
+        messageLink = targetMessage.url;
+      } catch (error) {
+        console.error('Erreur récupération message:', error);
+      }
+
+      // Créer le rappel
+      const reminders = await loadReminders();
+      const newReminder = {
+        id: Date.now(),
+        userId: interaction.user.id,
+        message: `Rappel: voir le message`,
+        timestamp: parsedDate.getTime(),
+        createdAt: Date.now(),
+        contexte: note,
+        lien: messageLink,
+        tag: 'Message',
+        priorite: 'moyenne',
+        trelloCardId: null
+      };
+
+      reminders.push(newReminder);
+      await saveReminders(reminders);
+
+      const dateStr = parsedDate.toLocaleString('fr-FR', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      let confirmMsg = `✅ **Rappel créé pour ${dateStr}**\n\n📋 Lien vers le message enregistré`;
+      if (note) confirmMsg += `\n📝 Note: ${note}`;
+
+      await interaction.editReply({
+        content: confirmMsg
       });
     }
   }
