@@ -338,8 +338,9 @@ app.post('/webhook/trello', async (req, res) => {
 });
 
 // Démarrer le serveur webhook
-const WEBHOOK_PORT = process.env.WEBHOOK_PORT || 3000;
-app.listen(WEBHOOK_PORT, () => {
+// Render fournit PORT, Railway fournit WEBHOOK_PORT
+const WEBHOOK_PORT = process.env.PORT || process.env.WEBHOOK_PORT || 3000;
+app.listen(WEBHOOK_PORT, '0.0.0.0', () => {
   console.log(`🌐 Serveur webhook démarré sur le port ${WEBHOOK_PORT}`);
 });
 
