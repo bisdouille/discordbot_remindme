@@ -1,0 +1,25 @@
+{
+  "name": "discord-reminder-bot",
+  "version": "1.0.0",
+  "description": "Un bot Discord pour créer des rappels automatiques",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "reminder"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.12.2",
+    "chrono-node": "^2.9.0",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.1",
+    "express": "^5.1.0"
+  }
+}
