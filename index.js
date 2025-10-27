@@ -567,7 +567,7 @@ client.on('interactionCreate', async interaction => {
 
       const noteInput = new TextInputBuilder()
         .setCustomId('note')
-        .setLabel('Note personnelle (optionnel)')
+        .setLabel('Tâche')
         .setStyle(TextInputStyle.Paragraph)
         .setPlaceholder('Contexte ou note pour ce rappel...')
         .setRequired(false);
