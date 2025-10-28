@@ -552,44 +552,46 @@ async function registerCommands() {
 // ==================== GESTIONNAIRE D'INTERACTIONS ====================
 
 client.on('interactionCreate', async interaction => {
-  // Gérer les commandes de menu contextuel (clic droit)
-  if (interaction.isMessageContextMenuCommand()) {
-    if (interaction.commandName === 'Créer un rappel') {
-      const message = interaction.targetMessage;
+  try {
+    // Gérer les commandes de menu contextuel (clic droit)
+    if (interaction.isMessageContextMenuCommand()) {
+      if (interaction.commandName === 'Créer un rappel') {
+        const message = interaction.targetMessage;
 
-      // Stocker l'URL du message dans le cache temporaire
-      messageUrlCache.set(message.id, message.url);
-      // Auto-nettoyer après 10 minutes
-      setTimeout(() => messageUrlCache.delete(message.id), 10 * 60 * 1000);
+        // Stocker l'URL du message dans le cache temporaire
+        const messageUrl = message.url || `https://discord.com/channels/${message.guildId || '@me'}/${message.channelId}/${message.id}`;
+        messageUrlCache.set(message.id, messageUrl);
+        // Auto-nettoyer après 10 minutes
+        setTimeout(() => messageUrlCache.delete(message.id), 10 * 60 * 1000);
 
-      // Créer un modal pour demander les détails du rappel
-      const modal = new ModalBuilder()
-        .setCustomId(`reminder_modal_${message.id}`)
-        .setTitle('Créer un rappel depuis ce message');
+        // Créer un modal pour demander les détails du rappel
+        const modal = new ModalBuilder()
+          .setCustomId(`reminder_modal_${message.id}`)
+          .setTitle('Créer un rappel depuis ce message');
 
-      const quandInput = new TextInputBuilder()
-        .setCustomId('quand')
-        .setLabel('Quand ?')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Ex: demain 14h, dans 2h, lundi 9h')
-        .setRequired(true);
+        const quandInput = new TextInputBuilder()
+          .setCustomId('quand')
+          .setLabel('Quand ?')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Ex: demain 14h, dans 2h, lundi 9h')
+          .setRequired(true);
 
-      const noteInput = new TextInputBuilder()
-        .setCustomId('note')
-        .setLabel('Tâche')
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Contexte ou note pour ce rappel...')
-        .setRequired(false);
+        const noteInput = new TextInputBuilder()
+          .setCustomId('note')
+          .setLabel('Tâche')
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder('Contexte ou note pour ce rappel...')
+          .setRequired(false);
 
-      const row1 = new ActionRowBuilder().addComponents(quandInput);
-      const row2 = new ActionRowBuilder().addComponents(noteInput);
+        const row1 = new ActionRowBuilder().addComponents(quandInput);
+        const row2 = new ActionRowBuilder().addComponents(noteInput);
 
-      modal.addComponents(row1, row2);
+        modal.addComponents(row1, row2);
 
-      await interaction.showModal(modal);
-      return;
+        await interaction.showModal(modal);
+        return;
+      }
     }
-  }
 
   // Gérer les commandes slash
   if (interaction.isChatInputCommand()) {
@@ -1235,6 +1237,16 @@ client.on('interactionCreate', async interaction => {
       await interaction.editReply({
         content: `✅ **Rappel créé pour ${dateStr}**\n\n📋 ${rappelMessage}\n🔗 Lien enregistré vers le message`
       });
+    }
+  }
+  } catch (error) {
+    console.error('Erreur dans le handler d\'interaction:', error);
+    if (!interaction.replied && !interaction.deferred) {
+      try {
+        await interaction.reply({ content: '❌ Une erreur est survenue. Réessayez.', flags: 64 });
+      } catch (e) {
+        console.error('Impossible de répondre:', e);
+      }
     }
   }
 });
