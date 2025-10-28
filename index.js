@@ -1320,6 +1320,22 @@ async function checkReminders() {
   }
 }
 
+// ==================== KEEP-ALIVE ====================
+
+// Fonction pour garder le bot actif et éviter le "cold start" sur Render
+async function keepAlive() {
+  try {
+    const port = process.env.PORT || process.env.WEBHOOK_PORT || 3000;
+    const url = `http://localhost:${port}/health`;
+
+    await axios.get(url, { timeout: 5000 });
+    console.log('🏓 Keep-alive: bot actif');
+  } catch (error) {
+    // Ignorer les erreurs (peut arriver au démarrage)
+    console.log('⚠️ Keep-alive: erreur ignorée');
+  }
+}
+
 // ==================== DÉMARRAGE DU BOT ====================
 
 client.once('ready', () => {
@@ -1339,8 +1355,13 @@ client.once('ready', () => {
     console.log('   - Intégration Trello (non configurée)');
   }
 
+  // Vérification des rappels toutes les 30 secondes
   setInterval(checkReminders, 30000);
   checkReminders();
+
+  // Keep-alive interne: ping toutes les 10 minutes pour éviter le cold start
+  setInterval(keepAlive, 10 * 60 * 1000); // 10 minutes
+  console.log('🏓 Keep-alive interne activé (toutes les 10 min)');
 });
 
 async function start() {
