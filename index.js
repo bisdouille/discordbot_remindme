@@ -1325,14 +1325,14 @@ async function checkReminders() {
 // Fonction pour garder le bot actif et éviter le "cold start" sur Render
 async function keepAlive() {
   try {
-    const port = process.env.PORT || process.env.WEBHOOK_PORT || 3000;
-    const url = `http://localhost:${port}/health`;
+    // Utiliser l'URL publique pour garder Render éveillé
+    const publicUrl = 'https://discordbot-remindme.onrender.com/health';
 
-    await axios.get(url, { timeout: 5000 });
-    console.log('🏓 Keep-alive: bot actif');
+    const response = await axios.get(publicUrl, { timeout: 10000 });
+    console.log(`🏓 Keep-alive: ${response.data.bot} actif (uptime: ${Math.floor(response.data.uptime)}s)`);
   } catch (error) {
     // Ignorer les erreurs (peut arriver au démarrage)
-    console.log('⚠️ Keep-alive: erreur ignorée');
+    console.log('⚠️ Keep-alive: erreur', error.message);
   }
 }
 
