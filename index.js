@@ -1320,22 +1320,6 @@ async function checkReminders() {
   }
 }
 
-// ==================== KEEP-ALIVE ====================
-
-// Fonction pour garder le bot actif et éviter le "cold start" sur Render
-async function keepAlive() {
-  try {
-    // Utiliser l'URL publique pour garder Render éveillé
-    const publicUrl = 'https://discordbot-remindme.onrender.com/health';
-
-    const response = await axios.get(publicUrl, { timeout: 10000 });
-    console.log(`🏓 Keep-alive: ${response.data.bot} actif (uptime: ${Math.floor(response.data.uptime)}s)`);
-  } catch (error) {
-    // Ignorer les erreurs (peut arriver au démarrage)
-    console.log('⚠️ Keep-alive: erreur', error.message);
-  }
-}
-
 // ==================== DÉMARRAGE DU BOT ====================
 
 client.once('ready', () => {
@@ -1358,10 +1342,6 @@ client.once('ready', () => {
   // Vérification des rappels toutes les 30 secondes
   setInterval(checkReminders, 30000);
   checkReminders();
-
-  // Keep-alive interne: ping toutes les 10 minutes pour éviter le cold start
-  setInterval(keepAlive, 10 * 60 * 1000); // 10 minutes
-  console.log('🏓 Keep-alive interne activé (toutes les 10 min)');
 });
 
 async function start() {
