@@ -793,9 +793,8 @@ client.on('interactionCreate', async interaction => {
       if (interaction.commandName === 'Taguer cette conversation') {
         const message = interaction.targetMessage;
 
-        // Déterminer l'ID de la conversation (userId en DM, channelId en serveur)
+        // Déterminer l'ID de la conversation
         const conversationId = message.channelId;
-        const isDM = message.channel.isDMBased();
 
         // Vérifier si une conversation existe déjà
         const conversations = await loadTaggedConversations();
