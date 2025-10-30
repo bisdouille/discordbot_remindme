@@ -67,19 +67,54 @@ async function saveWebhookIds(webhookIds) {
 
 // ==================== FONCTIONS GESTION TAGS CONVERSATIONS ====================
 
+// Initialiser les fichiers JSON s'ils n'existent pas
+async function initializeTagsFiles() {
+  try {
+    // Vérifier si tagged-conversations.json existe
+    try {
+      await fs.access(TAGGED_CONVERSATIONS_FILE);
+    } catch {
+      // Créer le fichier s'il n'existe pas
+      await fs.writeFile(TAGGED_CONVERSATIONS_FILE, JSON.stringify([], null, 2));
+      console.log('✅ Fichier tagged-conversations.json créé');
+    }
+
+    // Vérifier si available-tags.json existe
+    try {
+      await fs.access(AVAILABLE_TAGS_FILE);
+    } catch {
+      // Créer le fichier avec des tags par défaut
+      const defaultTags = {
+        tags: ["Influenceur", "FR", "EN", "Prestataire MC", "Client", "Partenaire"],
+        categories: ["Clients", "Partenaires", "Prospects", "Équipe"]
+      };
+      await fs.writeFile(AVAILABLE_TAGS_FILE, JSON.stringify(defaultTags, null, 2));
+      console.log('✅ Fichier available-tags.json créé avec tags par défaut');
+    }
+  } catch (error) {
+    console.error('Erreur lors de l\'initialisation des fichiers tags:', error);
+  }
+}
+
 // Charger les conversations taguées
 async function loadTaggedConversations() {
   try {
     const data = await fs.readFile(TAGGED_CONVERSATIONS_FILE, 'utf-8');
     return JSON.parse(data);
   } catch (error) {
+    console.error('Erreur chargement conversations:', error);
     return [];
   }
 }
 
 // Sauvegarder les conversations taguées
 async function saveTaggedConversations(conversations) {
-  await fs.writeFile(TAGGED_CONVERSATIONS_FILE, JSON.stringify(conversations, null, 2));
+  try {
+    await fs.writeFile(TAGGED_CONVERSATIONS_FILE, JSON.stringify(conversations, null, 2));
+  } catch (error) {
+    console.error('Erreur sauvegarde conversations:', error);
+    throw error;
+  }
 }
 
 // Charger les tags disponibles
@@ -88,13 +123,19 @@ async function loadAvailableTags() {
     const data = await fs.readFile(AVAILABLE_TAGS_FILE, 'utf-8');
     return JSON.parse(data);
   } catch (error) {
+    console.error('Erreur chargement tags:', error);
     return { tags: [], categories: [] };
   }
 }
 
 // Sauvegarder les tags disponibles
 async function saveAvailableTags(tagsData) {
-  await fs.writeFile(AVAILABLE_TAGS_FILE, JSON.stringify(tagsData, null, 2));
+  try {
+    await fs.writeFile(AVAILABLE_TAGS_FILE, JSON.stringify(tagsData, null, 2));
+  } catch (error) {
+    console.error('Erreur sauvegarde tags:', error);
+    throw error;
+  }
 }
 
 // Trouver une conversation existante
@@ -1764,46 +1805,60 @@ client.on('interactionCreate', async interaction => {
 
     // Modal: Taguer une conversation (création/modification)
     if (interaction.customId.startsWith('tag_conversation_modal_')) {
-      await interaction.deferReply({ flags: 64 });
+      try {
+        console.log('📝 Modal de tag soumis');
+        await interaction.deferReply({ flags: 64 });
 
-      const conversationId = interaction.customId.replace('tag_conversation_modal_', '');
-      const nom = interaction.fields.getTextInputValue('nom').trim();
-      const tagsStr = interaction.fields.getTextInputValue('tags').trim();
-      const categorie = interaction.fields.getTextInputValue('categorie')?.trim() || null;
+        const conversationId = interaction.customId.replace('tag_conversation_modal_', '');
+        console.log('🆔 Conversation ID:', conversationId);
 
-      // Parser les tags (séparés par des virgules)
-      const tags = tagsStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        const nom = interaction.fields.getTextInputValue('nom').trim();
+        const tagsStr = interaction.fields.getTextInputValue('tags').trim();
+        const categorie = interaction.fields.getTextInputValue('categorie')?.trim() || null;
 
-      if (tags.length === 0) {
+        console.log('📋 Données reçues:', { nom, tagsStr, categorie });
+
+        // Parser les tags (séparés par des virgules)
+        const tags = tagsStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
+        if (tags.length === 0) {
+          await interaction.editReply({
+            content: '❌ Vous devez spécifier au moins un tag.'
+          });
+          return;
+        }
+
+        // Construire l'URL du message
+        const messageLink = `https://discord.com/channels/@me/${conversationId}`;
+
+        const conversationData = {
+          conversationId,
+          ownerId: interaction.user.id,
+          nom,
+          tags,
+          categorie,
+          messageLink
+        };
+
+        console.log('💾 Tentative de sauvegarde...');
+        const result = await createOrUpdateTaggedConversation(conversationData);
+        console.log('✅ Sauvegarde réussie:', result.isNew ? 'nouvelle' : 'mise à jour');
+
+        const tagsStr2 = tags.map(t => `\`${t}\``).join(' ');
+
+        if (result.isNew) {
+          await interaction.editReply({
+            content: `✅ **Conversation taguée avec succès !**\n\n👤 **Nom:** ${nom}\n🏷️ **Tags:** ${tagsStr2}${categorie ? `\n📁 **Catégorie:** ${categorie}` : ''}\n\nUtilisez \`/conversations-taguees\` pour voir toutes vos conversations taguées.`
+          });
+        } else {
+          await interaction.editReply({
+            content: `✅ **Conversation mise à jour !**\n\n👤 **Nom:** ${nom}\n🏷️ **Tags:** ${tagsStr2}${categorie ? `\n📁 **Catégorie:** ${categorie}` : ''}\n\n_Cette conversation était déjà taguée, les informations ont été mises à jour._`
+          });
+        }
+      } catch (error) {
+        console.error('❌ Erreur dans le modal de tag:', error);
         await interaction.editReply({
-          content: '❌ Vous devez spécifier au moins un tag.'
-        });
-        return;
-      }
-
-      // Construire l'URL du message
-      const messageLink = `https://discord.com/channels/@me/${conversationId}`;
-
-      const conversationData = {
-        conversationId,
-        ownerId: interaction.user.id,
-        nom,
-        tags,
-        categorie,
-        messageLink
-      };
-
-      const result = await createOrUpdateTaggedConversation(conversationData);
-
-      const tagsStr2 = tags.map(t => `\`${t}\``).join(' ');
-
-      if (result.isNew) {
-        await interaction.editReply({
-          content: `✅ **Conversation taguée avec succès !**\n\n👤 **Nom:** ${nom}\n🏷️ **Tags:** ${tagsStr2}${categorie ? `\n📁 **Catégorie:** ${categorie}` : ''}\n\nUtilisez \`/conversations-taguees\` pour voir toutes vos conversations taguées.`
-        });
-      } else {
-        await interaction.editReply({
-          content: `✅ **Conversation mise à jour !**\n\n👤 **Nom:** ${nom}\n🏷️ **Tags:** ${tagsStr2}${categorie ? `\n📁 **Catégorie:** ${categorie}` : ''}\n\n_Cette conversation était déjà taguée, les informations ont été mises à jour._`
+          content: `❌ Erreur: ${error.message}`
         });
       }
     }
@@ -1935,12 +1990,17 @@ async function checkReminders() {
 
 // ==================== DÉMARRAGE DU BOT ====================
 
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
+
+  // Initialiser les fichiers de tags
+  await initializeTagsFiles();
+
   console.log('📦 Fonctionnalités activées:');
   console.log('   - Raccourcis temporels (demain, dans 2h, etc.)');
   console.log('   - Tags et priorités');
   console.log('   - Boutons Snooze');
+  console.log('   - Système de tags pour conversations ✓');
   if (process.env.TRELLO_API_KEY && process.env.TRELLO_TOKEN) {
     console.log('   - Intégration Trello ✓');
     if (process.env.WEBHOOK_URL) {
