@@ -4,10 +4,22 @@ Un bot Discord pour créer des rappels automatiques en messages privés, similai
 
 ## Fonctionnalités
 
+### Rappels
 - Créer des rappels avec un délai personnalisé (jours, heures, minutes)
 - Recevoir des notifications en message privé
 - Voir tous vos rappels actifs
 - Supprimer des rappels
+- Tags et priorités
+- Dates naturelles ("demain 14h", "dans 2h")
+- Boutons Snooze interactifs
+
+### Système de Tags pour Conversations (Nouveau !)
+- Taguer vos conversations Discord avec des tags personnalisés
+- Organiser par catégories (Clients, Partenaires, etc.)
+- Retrouver facilement vos conversations par tag
+- Filtrer et rechercher vos contacts
+- Prévention automatique des doublons
+- [Guide complet des tags](GUIDE_TAGS.md)
 
 ## Installation
 
@@ -103,10 +115,36 @@ Supprime un rappel en utilisant son ID.
 /supprimer-rappel id:1729876543210
 ```
 
+### Commandes de gestion des tags (Nouveau !)
+
+#### 🏷️ Gestion des tags
+
+- `/tags-creer` - Créer un nouveau tag
+- `/tags-liste` - Voir tous les tags disponibles
+- `/tags-supprimer` - Supprimer un tag
+
+#### 📁 Gestion des catégories
+
+- `/categorie-creer` - Créer une nouvelle catégorie
+- `/categorie-supprimer` - Supprimer une catégorie
+
+#### 💬 Taguer des conversations
+
+- **Clic droit sur message** → "Taguer cette conversation" - Taguer/modifier une conversation
+- `/conversations-taguees` - Voir toutes vos conversations taguées
+- `/conversations-par-tag` - Filtrer par tag spécifique
+- `/conversation-modifier` - Modifier les tags d'une conversation
+- `/conversation-supprimer` - Retirer une conversation des tags
+
+**Pour plus de détails, consultez le [Guide complet des tags](GUIDE_TAGS.md)**
+
 ## Architecture
 
 - `index.js` : Fichier principal du bot
 - `reminders.json` : Stockage des rappels (créé automatiquement)
+- `tagged-conversations.json` : Stockage des conversations taguées (créé automatiquement)
+- `available-tags.json` : Liste des tags et catégories (créé automatiquement)
+- `trello-webhooks.json` : IDs des webhooks Trello (créé automatiquement)
 - `.env` : Variables d'environnement (token et client ID)
 
 ## Notes importantes

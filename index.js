@@ -25,6 +25,8 @@ const client = new Client({
 // Fichiers de stockage
 const REMINDERS_FILE = join(__dirname, 'reminders.json');
 const WEBHOOK_IDS_FILE = join(__dirname, 'trello-webhooks.json');
+const TAGGED_CONVERSATIONS_FILE = join(__dirname, 'tagged-conversations.json');
+const AVAILABLE_TAGS_FILE = join(__dirname, 'available-tags.json');
 
 // Cache pour éviter les notifications en double (cardId -> timestamp)
 const notificationCache = new Map();
@@ -61,6 +63,70 @@ async function loadWebhookIds() {
 // Sauvegarder les IDs de webhooks
 async function saveWebhookIds(webhookIds) {
   await fs.writeFile(WEBHOOK_IDS_FILE, JSON.stringify(webhookIds, null, 2));
+}
+
+// ==================== FONCTIONS GESTION TAGS CONVERSATIONS ====================
+
+// Charger les conversations taguées
+async function loadTaggedConversations() {
+  try {
+    const data = await fs.readFile(TAGGED_CONVERSATIONS_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    return [];
+  }
+}
+
+// Sauvegarder les conversations taguées
+async function saveTaggedConversations(conversations) {
+  await fs.writeFile(TAGGED_CONVERSATIONS_FILE, JSON.stringify(conversations, null, 2));
+}
+
+// Charger les tags disponibles
+async function loadAvailableTags() {
+  try {
+    const data = await fs.readFile(AVAILABLE_TAGS_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    return { tags: [], categories: [] };
+  }
+}
+
+// Sauvegarder les tags disponibles
+async function saveAvailableTags(tagsData) {
+  await fs.writeFile(AVAILABLE_TAGS_FILE, JSON.stringify(tagsData, null, 2));
+}
+
+// Trouver une conversation existante
+function findConversation(conversations, conversationId, ownerId) {
+  return conversations.find(c => c.conversationId === conversationId && c.ownerId === ownerId);
+}
+
+// Créer ou mettre à jour une conversation taguée
+async function createOrUpdateTaggedConversation(conversationData) {
+  const conversations = await loadTaggedConversations();
+  const existing = findConversation(conversations, conversationData.conversationId, conversationData.ownerId);
+
+  if (existing) {
+    // Mise à jour
+    existing.nom = conversationData.nom;
+    existing.tags = conversationData.tags;
+    existing.categorie = conversationData.categorie;
+    existing.messageLink = conversationData.messageLink;
+    existing.updatedAt = Date.now();
+    await saveTaggedConversations(conversations);
+    return { isNew: false, conversation: existing };
+  } else {
+    // Création
+    const newConversation = {
+      ...conversationData,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    conversations.push(newConversation);
+    await saveTaggedConversations(conversations);
+    return { isNew: true, conversation: newConversation };
+  }
 }
 
 // ==================== FONCTIONS TRELLO ====================
@@ -520,9 +586,99 @@ const commands = [
     .setName('clear-tout')
     .setDescription('⚠️ Supprimer TOUS vos rappels (action irréversible)'),
 
-  // Commande de menu contextuel (clic droit sur message)
+  // ==================== COMMANDES GESTION TAGS CONVERSATIONS ====================
+
+  new SlashCommandBuilder()
+    .setName('tags-creer')
+    .setDescription('Créer un nouveau tag')
+    .addStringOption(option =>
+      option
+        .setName('nom')
+        .setDescription('Nom du tag (ex: "Influenceur", "FR", "Prestataire MC")')
+        .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('tags-liste')
+    .setDescription('Voir tous les tags et catégories disponibles'),
+
+  new SlashCommandBuilder()
+    .setName('tags-supprimer')
+    .setDescription('Supprimer un tag existant')
+    .addStringOption(option =>
+      option
+        .setName('nom')
+        .setDescription('Nom du tag à supprimer')
+        .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('categorie-creer')
+    .setDescription('Créer une nouvelle catégorie')
+    .addStringOption(option =>
+      option
+        .setName('nom')
+        .setDescription('Nom de la catégorie (ex: "Clients", "Partenaires")')
+        .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('categorie-supprimer')
+    .setDescription('Supprimer une catégorie existante')
+    .addStringOption(option =>
+      option
+        .setName('nom')
+        .setDescription('Nom de la catégorie à supprimer')
+        .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('conversations-taguees')
+    .setDescription('Voir toutes vos conversations taguées')
+    .addStringOption(option =>
+      option
+        .setName('categorie')
+        .setDescription('Filtrer par catégorie (optionnel)')
+        .setRequired(false)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('conversations-par-tag')
+    .setDescription('Voir les conversations filtrées par tag')
+    .addStringOption(option =>
+      option
+        .setName('tag')
+        .setDescription('Le tag à filtrer')
+        .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('conversation-modifier')
+    .setDescription('Modifier les tags d\'une conversation')
+    .addStringOption(option =>
+      option
+        .setName('nom')
+        .setDescription('Nom de la conversation à modifier')
+        .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('conversation-supprimer')
+    .setDescription('Retirer complètement une conversation des tags')
+    .addStringOption(option =>
+      option
+        .setName('nom')
+        .setDescription('Nom de la conversation à supprimer')
+        .setRequired(true)
+    ),
+
+  // Commandes de menu contextuel (clic droit sur message)
   new ContextMenuCommandBuilder()
     .setName('Créer un rappel')
+    .setType(ApplicationCommandType.Message),
+
+  new ContextMenuCommandBuilder()
+    .setName('Taguer cette conversation')
     .setType(ApplicationCommandType.Message),
 ].map(command => {
   const json = command.toJSON();
@@ -587,6 +743,73 @@ client.on('interactionCreate', async interaction => {
         const row2 = new ActionRowBuilder().addComponents(noteInput);
 
         modal.addComponents(row1, row2);
+
+        await interaction.showModal(modal);
+        return;
+      }
+
+      // Menu contextuel: Taguer cette conversation
+      if (interaction.commandName === 'Taguer cette conversation') {
+        const message = interaction.targetMessage;
+
+        // Déterminer l'ID de la conversation (userId en DM, channelId en serveur)
+        const conversationId = message.channelId;
+        const isDM = message.channel.isDMBased();
+
+        // Vérifier si une conversation existe déjà
+        const conversations = await loadTaggedConversations();
+        const existing = findConversation(conversations, conversationId, interaction.user.id);
+
+        // Charger les tags et catégories disponibles
+        const tagsData = await loadAvailableTags();
+
+        // Créer un modal pour demander les détails
+        const modal = new ModalBuilder()
+          .setCustomId(`tag_conversation_modal_${conversationId}`)
+          .setTitle(existing ? 'Modifier les tags' : 'Taguer cette conversation');
+
+        const nomInput = new TextInputBuilder()
+          .setCustomId('nom')
+          .setLabel('Nom de la personne/conversation')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Ex: Jean, Marie, Partenaire X...')
+          .setRequired(true);
+
+        if (existing) {
+          nomInput.setValue(existing.nom);
+        }
+
+        const tagsInput = new TextInputBuilder()
+          .setCustomId('tags')
+          .setLabel('Tags (séparés par des virgules)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Ex: Influenceur, FR, Prestataire MC')
+          .setRequired(true);
+
+        if (existing) {
+          tagsInput.setValue(existing.tags.join(', '));
+        } else if (tagsData.tags.length > 0) {
+          tagsInput.setPlaceholder(`Disponibles: ${tagsData.tags.slice(0, 5).join(', ')}...`);
+        }
+
+        const categorieInput = new TextInputBuilder()
+          .setCustomId('categorie')
+          .setLabel('Catégorie (optionnel)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Ex: Clients, Partenaires, Prospects...')
+          .setRequired(false);
+
+        if (existing) {
+          categorieInput.setValue(existing.categorie || '');
+        } else if (tagsData.categories.length > 0) {
+          categorieInput.setPlaceholder(`Disponibles: ${tagsData.categories.slice(0, 3).join(', ')}...`);
+        }
+
+        const row1 = new ActionRowBuilder().addComponents(nomInput);
+        const row2 = new ActionRowBuilder().addComponents(tagsInput);
+        const row3 = new ActionRowBuilder().addComponents(categorieInput);
+
+        modal.addComponents(row1, row2, row3);
 
         await interaction.showModal(modal);
         return;
@@ -1062,6 +1285,305 @@ client.on('interactionCreate', async interaction => {
         components: [row]
       });
     }
+
+    // ==================== COMMANDES GESTION TAGS ====================
+
+    // COMMANDE: /tags-creer
+    if (commandName === 'tags-creer') {
+      await interaction.deferReply({ flags: 64 });
+
+      const tagName = interaction.options.getString('nom').trim();
+      const tagsData = await loadAvailableTags();
+
+      if (tagsData.tags.includes(tagName)) {
+        await interaction.editReply({
+          content: `❌ Le tag "${tagName}" existe déjà.`
+        });
+        return;
+      }
+
+      tagsData.tags.push(tagName);
+      await saveAvailableTags(tagsData);
+
+      await interaction.editReply({
+        content: `✅ Tag "${tagName}" créé avec succès !\n\nVous pouvez maintenant l'utiliser pour taguer vos conversations.`
+      });
+    }
+
+    // COMMANDE: /tags-liste
+    if (commandName === 'tags-liste') {
+      await interaction.deferReply({ flags: 64 });
+
+      const tagsData = await loadAvailableTags();
+
+      if (tagsData.tags.length === 0 && tagsData.categories.length === 0) {
+        await interaction.editReply({
+          content: '📭 Aucun tag ou catégorie créé.\n\nUtilisez `/tags-creer` pour créer un tag et `/categorie-creer` pour créer une catégorie.'
+        });
+        return;
+      }
+
+      let message = '📋 **Vos tags et catégories**\n\n';
+
+      if (tagsData.tags.length > 0) {
+        message += `🏷️ **Tags disponibles (${tagsData.tags.length}):**\n`;
+        message += tagsData.tags.map(t => `• ${t}`).join('\n');
+        message += '\n\n';
+      }
+
+      if (tagsData.categories.length > 0) {
+        message += `📁 **Catégories disponibles (${tagsData.categories.length}):**\n`;
+        message += tagsData.categories.map(c => `• ${c}`).join('\n');
+      }
+
+      await interaction.editReply({ content: message });
+    }
+
+    // COMMANDE: /tags-supprimer
+    if (commandName === 'tags-supprimer') {
+      await interaction.deferReply({ flags: 64 });
+
+      const tagName = interaction.options.getString('nom').trim();
+      const tagsData = await loadAvailableTags();
+
+      if (!tagsData.tags.includes(tagName)) {
+        await interaction.editReply({
+          content: `❌ Le tag "${tagName}" n'existe pas.`
+        });
+        return;
+      }
+
+      tagsData.tags = tagsData.tags.filter(t => t !== tagName);
+      await saveAvailableTags(tagsData);
+
+      // Optionnel: retirer ce tag de toutes les conversations
+      const conversations = await loadTaggedConversations();
+      let updated = 0;
+      conversations.forEach(conv => {
+        if (conv.tags.includes(tagName)) {
+          conv.tags = conv.tags.filter(t => t !== tagName);
+          conv.updatedAt = Date.now();
+          updated++;
+        }
+      });
+      if (updated > 0) {
+        await saveTaggedConversations(conversations);
+      }
+
+      await interaction.editReply({
+        content: `✅ Tag "${tagName}" supprimé avec succès !${updated > 0 ? `\n\n${updated} conversation(s) mise(s) à jour.` : ''}`
+      });
+    }
+
+    // COMMANDE: /categorie-creer
+    if (commandName === 'categorie-creer') {
+      await interaction.deferReply({ flags: 64 });
+
+      const categorieName = interaction.options.getString('nom').trim();
+      const tagsData = await loadAvailableTags();
+
+      if (tagsData.categories.includes(categorieName)) {
+        await interaction.editReply({
+          content: `❌ La catégorie "${categorieName}" existe déjà.`
+        });
+        return;
+      }
+
+      tagsData.categories.push(categorieName);
+      await saveAvailableTags(tagsData);
+
+      await interaction.editReply({
+        content: `✅ Catégorie "${categorieName}" créée avec succès !`
+      });
+    }
+
+    // COMMANDE: /categorie-supprimer
+    if (commandName === 'categorie-supprimer') {
+      await interaction.deferReply({ flags: 64 });
+
+      const categorieName = interaction.options.getString('nom').trim();
+      const tagsData = await loadAvailableTags();
+
+      if (!tagsData.categories.includes(categorieName)) {
+        await interaction.editReply({
+          content: `❌ La catégorie "${categorieName}" n'existe pas.`
+        });
+        return;
+      }
+
+      tagsData.categories = tagsData.categories.filter(c => c !== categorieName);
+      await saveAvailableTags(tagsData);
+
+      await interaction.editReply({
+        content: `✅ Catégorie "${categorieName}" supprimée avec succès !`
+      });
+    }
+
+    // COMMANDE: /conversations-taguees
+    if (commandName === 'conversations-taguees') {
+      await interaction.deferReply({ flags: 64 });
+
+      const categorieFilter = interaction.options.getString('categorie');
+      const conversations = await loadTaggedConversations();
+      const userConversations = conversations.filter(c => c.ownerId === interaction.user.id);
+
+      let filtered = userConversations;
+      if (categorieFilter) {
+        filtered = userConversations.filter(c => c.categorie === categorieFilter);
+      }
+
+      if (filtered.length === 0) {
+        await interaction.editReply({
+          content: categorieFilter
+            ? `📭 Aucune conversation taguée dans la catégorie "${categorieFilter}".\n\nUtilisez le menu contextuel (clic droit sur un message) → "Taguer cette conversation".`
+            : '📭 Aucune conversation taguée.\n\nUtilisez le menu contextuel (clic droit sur un message) → "Taguer cette conversation".'
+        });
+        return;
+      }
+
+      // Grouper par catégorie
+      const grouped = {};
+      filtered.forEach(conv => {
+        const cat = conv.categorie || 'Sans catégorie';
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(conv);
+      });
+
+      let message = `📋 **Vos conversations taguées (${filtered.length})**\n\n`;
+
+      for (const [categorie, convs] of Object.entries(grouped)) {
+        message += `📁 Catégorie **"${categorie.toUpperCase()}"**\n`;
+        convs.forEach(conv => {
+          const tagsStr = conv.tags.join(' ; ');
+          message += `   • **"${conv.nom}"** (tags: ${tagsStr})`;
+          if (conv.messageLink) {
+            message += ` - [Lien](${conv.messageLink})`;
+          }
+          message += '\n';
+        });
+        message += '\n';
+      }
+
+      // Si le message est trop long, le tronquer
+      if (message.length > 2000) {
+        message = message.substring(0, 1900) + '\n\n... _(liste tronquée)_';
+      }
+
+      await interaction.editReply({ content: message });
+    }
+
+    // COMMANDE: /conversations-par-tag
+    if (commandName === 'conversations-par-tag') {
+      await interaction.deferReply({ flags: 64 });
+
+      const tag = interaction.options.getString('tag');
+      const conversations = await loadTaggedConversations();
+      const userConversations = conversations.filter(c => c.ownerId === interaction.user.id);
+      const filtered = userConversations.filter(c => c.tags.includes(tag));
+
+      if (filtered.length === 0) {
+        await interaction.editReply({
+          content: `📭 Aucune conversation avec le tag "${tag}".`
+        });
+        return;
+      }
+
+      let message = `🏷️ **Conversations avec le tag "${tag}" (${filtered.length})**\n\n`;
+
+      filtered.forEach(conv => {
+        const tagsStr = conv.tags.join(' ; ');
+        message += `• **"${conv.nom}"** (tags: ${tagsStr})`;
+        if (conv.categorie) {
+          message += ` - Catégorie: **${conv.categorie}**`;
+        }
+        if (conv.messageLink) {
+          message += ` - [Lien](${conv.messageLink})`;
+        }
+        message += '\n';
+      });
+
+      if (message.length > 2000) {
+        message = message.substring(0, 1900) + '\n\n... _(liste tronquée)_';
+      }
+
+      await interaction.editReply({ content: message });
+    }
+
+    // COMMANDE: /conversation-modifier
+    if (commandName === 'conversation-modifier') {
+      await interaction.deferReply({ flags: 64 });
+
+      const nom = interaction.options.getString('nom');
+      const conversations = await loadTaggedConversations();
+      const conv = conversations.find(c => c.ownerId === interaction.user.id && c.nom.toLowerCase() === nom.toLowerCase());
+
+      if (!conv) {
+        await interaction.editReply({
+          content: `❌ Aucune conversation trouvée avec le nom "${nom}".\n\nUtilisez \`/conversations-taguees\` pour voir toutes vos conversations.`
+        });
+        return;
+      }
+
+      // Créer un modal pour modifier
+      const modal = new ModalBuilder()
+        .setCustomId(`edit_conversation_modal_${conv.conversationId}`)
+        .setTitle(`Modifier: ${conv.nom}`);
+
+      const tagsData = await loadAvailableTags();
+
+      const nomInput = new TextInputBuilder()
+        .setCustomId('nom')
+        .setLabel('Nom')
+        .setStyle(TextInputStyle.Short)
+        .setValue(conv.nom)
+        .setRequired(true);
+
+      const tagsInput = new TextInputBuilder()
+        .setCustomId('tags')
+        .setLabel('Tags (séparés par des virgules)')
+        .setStyle(TextInputStyle.Short)
+        .setValue(conv.tags.join(', '))
+        .setRequired(true);
+
+      const categorieInput = new TextInputBuilder()
+        .setCustomId('categorie')
+        .setLabel('Catégorie (optionnel)')
+        .setStyle(TextInputStyle.Short)
+        .setValue(conv.categorie || '')
+        .setRequired(false);
+
+      const row1 = new ActionRowBuilder().addComponents(nomInput);
+      const row2 = new ActionRowBuilder().addComponents(tagsInput);
+      const row3 = new ActionRowBuilder().addComponents(categorieInput);
+
+      modal.addComponents(row1, row2, row3);
+
+      await interaction.showModal(modal);
+    }
+
+    // COMMANDE: /conversation-supprimer
+    if (commandName === 'conversation-supprimer') {
+      await interaction.deferReply({ flags: 64 });
+
+      const nom = interaction.options.getString('nom');
+      const conversations = await loadTaggedConversations();
+      const index = conversations.findIndex(c => c.ownerId === interaction.user.id && c.nom.toLowerCase() === nom.toLowerCase());
+
+      if (index === -1) {
+        await interaction.editReply({
+          content: `❌ Aucune conversation trouvée avec le nom "${nom}".\n\nUtilisez \`/conversations-taguees\` pour voir toutes vos conversations.`
+        });
+        return;
+      }
+
+      const deleted = conversations[index];
+      conversations.splice(index, 1);
+      await saveTaggedConversations(conversations);
+
+      await interaction.editReply({
+        content: `✅ Conversation "${deleted.nom}" supprimée des tags.`
+      });
+    }
   }
 
   // Gérer les boutons
@@ -1184,6 +1706,7 @@ client.on('interactionCreate', async interaction => {
 
   // Gérer les soumissions de modals
   if (interaction.isModalSubmit()) {
+    // Modal: Créer un rappel depuis un message
     if (interaction.customId.startsWith('reminder_modal_')) {
       await interaction.deferReply({ flags: 64 }); // ephemeral
 
@@ -1236,6 +1759,96 @@ client.on('interactionCreate', async interaction => {
 
       await interaction.editReply({
         content: `✅ **Rappel créé pour ${dateStr}**\n\n📋 ${rappelMessage}\n🔗 Lien enregistré vers le message`
+      });
+    }
+
+    // Modal: Taguer une conversation (création/modification)
+    if (interaction.customId.startsWith('tag_conversation_modal_')) {
+      await interaction.deferReply({ flags: 64 });
+
+      const conversationId = interaction.customId.replace('tag_conversation_modal_', '');
+      const nom = interaction.fields.getTextInputValue('nom').trim();
+      const tagsStr = interaction.fields.getTextInputValue('tags').trim();
+      const categorie = interaction.fields.getTextInputValue('categorie')?.trim() || null;
+
+      // Parser les tags (séparés par des virgules)
+      const tags = tagsStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
+      if (tags.length === 0) {
+        await interaction.editReply({
+          content: '❌ Vous devez spécifier au moins un tag.'
+        });
+        return;
+      }
+
+      // Construire l'URL du message
+      const messageLink = `https://discord.com/channels/@me/${conversationId}`;
+
+      const conversationData = {
+        conversationId,
+        ownerId: interaction.user.id,
+        nom,
+        tags,
+        categorie,
+        messageLink
+      };
+
+      const result = await createOrUpdateTaggedConversation(conversationData);
+
+      const tagsStr2 = tags.map(t => `\`${t}\``).join(' ');
+
+      if (result.isNew) {
+        await interaction.editReply({
+          content: `✅ **Conversation taguée avec succès !**\n\n👤 **Nom:** ${nom}\n🏷️ **Tags:** ${tagsStr2}${categorie ? `\n📁 **Catégorie:** ${categorie}` : ''}\n\nUtilisez \`/conversations-taguees\` pour voir toutes vos conversations taguées.`
+        });
+      } else {
+        await interaction.editReply({
+          content: `✅ **Conversation mise à jour !**\n\n👤 **Nom:** ${nom}\n🏷️ **Tags:** ${tagsStr2}${categorie ? `\n📁 **Catégorie:** ${categorie}` : ''}\n\n_Cette conversation était déjà taguée, les informations ont été mises à jour._`
+        });
+      }
+    }
+
+    // Modal: Modifier une conversation existante
+    if (interaction.customId.startsWith('edit_conversation_modal_')) {
+      await interaction.deferReply({ flags: 64 });
+
+      const conversationId = interaction.customId.replace('edit_conversation_modal_', '');
+      const nom = interaction.fields.getTextInputValue('nom').trim();
+      const tagsStr = interaction.fields.getTextInputValue('tags').trim();
+      const categorie = interaction.fields.getTextInputValue('categorie')?.trim() || null;
+
+      // Parser les tags
+      const tags = tagsStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
+      if (tags.length === 0) {
+        await interaction.editReply({
+          content: '❌ Vous devez spécifier au moins un tag.'
+        });
+        return;
+      }
+
+      // Mettre à jour la conversation
+      const conversations = await loadTaggedConversations();
+      const conv = conversations.find(c => c.conversationId === conversationId && c.ownerId === interaction.user.id);
+
+      if (!conv) {
+        await interaction.editReply({
+          content: '❌ Conversation introuvable.'
+        });
+        return;
+      }
+
+      conv.nom = nom;
+      conv.tags = tags;
+      conv.categorie = categorie;
+      conv.updatedAt = Date.now();
+
+      await saveTaggedConversations(conversations);
+
+      const tagsStr2 = tags.map(t => `\`${t}\``).join(' ');
+
+      await interaction.editReply({
+        content: `✅ **Conversation mise à jour !**\n\n👤 **Nom:** ${nom}\n🏷️ **Tags:** ${tagsStr2}${categorie ? `\n📁 **Catégorie:** ${categorie}` : ''}`
       });
     }
   }

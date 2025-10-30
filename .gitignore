@@ -1,4 +1,7 @@
 node_modules/
 .env
 reminders.json
+tagged-conversations.json
+available-tags.json
+trello-webhooks.json
 *.log
